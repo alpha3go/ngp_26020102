@@ -1,4 +1,5 @@
 import './timetable-view.js';
+import './contact-form.js'; // Import the new contact form component
 
 class TimetableApp extends HTMLElement {
     constructor() {
@@ -16,6 +17,7 @@ class TimetableApp extends HTMLElement {
             isDarkTheme: this._loadThemePreference(),
             editingItemId: null,
             editingItem: null, // Store the item object being edited
+            showContactForm: false, // New state for contact form visibility
         };
         
         // Apply initial theme to the body element
@@ -425,6 +427,46 @@ class TimetableApp extends HTMLElement {
                     transform: translateX(24px);
                 }
 
+                /* Modal Styles */
+                .modal-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.7);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 1000;
+                }
+
+                .modal-content {
+                    position: relative;
+                    background-color: var(--color-surface);
+                    padding: 1.5rem;
+                    border-radius: 12px;
+                    border: 1px solid var(--color-border);
+                    box-shadow: 0 8px 32px 0 var(--shadow-color);
+                    max-width: 500px;
+                    width: 90%;
+                    color: var(--color-text-primary);
+                }
+
+                .modal-close-btn {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background: none;
+                    border: none;
+                    font-size: 1.5rem;
+                    cursor: pointer;
+                    color: var(--color-text-secondary);
+                }
+                .modal-close-btn:hover {
+                    color: var(--color-text-primary);
+                }
+
 
                 @media (max-width: 768px) {
                     :host {
@@ -487,6 +529,7 @@ class TimetableApp extends HTMLElement {
 
                 <div class="button-group">
                     <button id="export-png-btn" class="secondary-btn">PNG로 내보내기</button>
+                    <button id="show-contact-form-btn" class="secondary-btn">문의하기</button>
                 </div>
 
                 <h3>활동 목록</h3>
@@ -505,6 +548,15 @@ class TimetableApp extends HTMLElement {
                     `).join('')}
                 </ul>
             </div>
+
+            ${this.state.showContactForm ? `
+                <div class="modal-overlay">
+                    <div class="modal-content">
+                        <button class="modal-close-btn" id="modal-close-btn">✖</button>
+                        <contact-form></contact-form>
+                    </div>
+                </div>
+            ` : ''}
         `;
 
         this.shadowRoot.querySelector('#add-item-form').addEventListener('submit', (e) => {
@@ -576,6 +628,21 @@ class TimetableApp extends HTMLElement {
         const cancelEditBtn = this.shadowRoot.querySelector('#cancel-edit-btn');
         if (cancelEditBtn) {
             cancelEditBtn.addEventListener('click', () => this._cancelEdit());
+        }
+
+        // Event listener for contact form button
+        this.shadowRoot.querySelector('#show-contact-form-btn').addEventListener('click', () => {
+            this.state.showContactForm = true;
+            this._render();
+        });
+
+        // Event listener for modal close button
+        const modalCloseBtn = this.shadowRoot.querySelector('#modal-close-btn');
+        if (modalCloseBtn) {
+            modalCloseBtn.addEventListener('click', () => {
+                this.state.showContactForm = false;
+                this._render();
+            });
         }
     }
 
