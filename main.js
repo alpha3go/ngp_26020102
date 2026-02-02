@@ -125,26 +125,27 @@ class TimetableApp extends HTMLElement {
             return [];
         }
 
-        const events = items.map(item => {
-            // Handle overnight events by splitting them for processing
+        // Prepare events, handling overnight splits and adding a temporary ID for tracking
+        const preparedEvents = items.map(item => {
             if (item.start >= item.end) {
+                // Split overnight events into two parts
                 return [
-                    { ...item, start: item.start, end: 24 * 60, originalItemId: item.id },
-                    { ...item, start: 0, end: item.end, originalItemId: item.id }
+                    { ...item, start: item.start, end: 24 * 60, tempId: item.id },
+                    { ...item, start: 0, end: item.end, tempId: item.id }
                 ];
             }
-            return [{ ...item, originalItemId: item.id }];
+            return [{ ...item, tempId: item.id }];
         }).flat();
 
         // Collect all unique time points (start and end of all events)
         const timePoints = new Set();
-        events.forEach(event => {
+        preparedEvents.forEach(event => {
             timePoints.add(event.start);
             timePoints.add(event.end);
         });
         const sortedTimePoints = Array.from(timePoints).sort((a, b) => a - b);
 
-        const processedSegments = [];
+        const timeSlices = [];
 
         // Iterate through each small interval defined by time points
         for (let i = 0; i < sortedTimePoints.length - 1; i++) {
@@ -153,37 +154,33 @@ class TimetableApp extends HTMLElement {
 
             if (intervalStart === intervalEnd) continue; // Skip zero-length intervals
 
-            // Find all active events within this interval
-            const activeEvents = events.filter(event => {
-                // Check if the event overlaps with the current interval
-                // An event (eventStart, eventEnd) covers (intervalStart, intervalEnd) if:
-                // eventStart <= intervalStart AND eventEnd >= intervalEnd
-                // (Considering modulo 24*60 for wrapping overnight events if not already split)
-                
-                // For already split overnight events, event.end could be 24*60 or event.start could be 0.
-                // Simple overlap check
+            // Find all events active within this small interval
+            const activeEventsInSlice = preparedEvents.filter(event => {
                 return (event.start < intervalEnd && event.end > intervalStart);
             });
 
-            if (activeEvents.length > 0) {
+            if (activeEventsInSlice.length > 0) {
                 // Sort active events by priority (higher number = higher priority)
-                activeEvents.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-                
-                // The highest priority event dictates the color for this segment
-                const highestPriorityEvent = activeEvents[0];
+                // If priorities are equal, maintain original order (stable sort is not strictly needed here)
+                activeEventsInSlice.sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
-                processedSegments.push({
-                    name: highestPriorityEvent.name,
+                timeSlices.push({
                     start: intervalStart,
                     end: intervalEnd,
-                    color: highestPriorityEvent.color,
-                    borderColor: highestPriorityEvent.borderColor,
-                    priority: highestPriorityEvent.priority,
-                    originalItemId: highestPriorityEvent.originalItemId, // Keep track of the original item
+                    activeEvents: activeEventsInSlice.map(event => ({
+                        id: event.id, // Original ID
+                        name: event.name,
+                        start: intervalStart, // Use interval start/end for segment
+                        end: intervalEnd,
+                        color: event.color,
+                        borderColor: event.borderColor,
+                        priority: event.priority,
+                        originalItemId: event.id, // Reference to the original item ID
+                    }))
                 });
             }
         }
-        return processedSegments;
+        return timeSlices;
     }
 
     _render() {
@@ -445,7 +442,7 @@ class TimetableApp extends HTMLElement {
                 }
             </style>
             <div id="timetable-container">
-                <circular-timetable items='${JSON.stringify(this._processOverlaps(this.state.items))}'></circular-timetable>
+                <circular-timetable timeSlices='${JSON.stringify(this._processOverlaps(this.state.items))}'></circular-timetable>
             </div>
             <div id="controls-container">
                 <div class="theme-toggle">

@@ -2,36 +2,35 @@ class CircularTimetable extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
-        this._items = [];
+        this._timeSlices = []; // Changed from _items
         this.render();
     }
 
     static get observedAttributes() {
-        return ['items'];
+        return ['timeSlices'];
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
-        if (name === 'items') {
-            this._items = JSON.parse(newValue);
+        if (name === 'timeSlices') {
+            this._timeSlices = JSON.parse(newValue);
             this.render();
         }
     }
 
-    set items(value) {
-        this._items = value;
+    set timeSlices(value) {
+        this._timeSlices = value;
         this.render();
     }
 
-    get items() {
-        return this._items;
+    get timeSlices() {
+        return this._timeSlices;
     }
 
     render() {
         const size = 500;
         const center = size / 2;
-        // Radius of the outermost part of the timetable where the schedule items start.
-        // The inner part will be used for central circle or inner details if any.
-        const outerRadiusOfTimetable = size / 2 - 40;
+        const outerRadiusOfTimetable = size / 2 - 20; // Max radius for event sectors
+        const minRadialRadius = 40; // Inner radius for the innermost event sector
 
         this.shadowRoot.innerHTML = `
             <style>
@@ -82,23 +81,23 @@ class CircularTimetable extends HTMLElement {
             <svg viewBox="0 0 ${size} ${size}" id="timetable-svg">
                 <circle class="background-circle" cx="${center}" cy="${center}" r="${outerRadiusOfTimetable}" />
                 <g class="schedule-items">
-                    ${this.renderItems(center, outerRadiusOfTimetable)}
+                    ${this.renderItems(center, outerRadiusOfTimetable, minRadialRadius)}
                 </g>
                 <g class="hour-markers">
                     ${this.renderHourMarkers(center, outerRadiusOfTimetable)}
                 </g>
-                <circle cx="${center}" cy="${center}" r="40" fill="var(--color-background)" />
+                <circle cx="${center}" cy="${center}" r="${minRadialRadius}" fill="var(--color-background)" />
                 <text x="${center}" y="${center}" class="hour-text" fill="var(--color-text-primary)" style="font-size:18px;">24h</text>
 
             </svg>
         `;
     }
 
-    renderHourMarkers(center, outerRadius) {
+    renderHourMarkers(center, outerRadiusOfTimetable) { // Changed radius to outerRadiusOfTimetable
         let markers = '';
-        const innerHourMarkerRadius = outerRadius; // Markers start at the outer edge of schedule items
-        const outerHourMarkerRadius = outerRadius + 10; // Extend markers a bit outside
-        const textRadius = outerRadius + 25; // Text slightly further out
+        const innerHourMarkerRadius = outerRadiusOfTimetable;
+        const outerHourMarkerRadius = outerRadiusOfTimetable + 10;
+        const textRadius = outerRadiusOfTimetable + 25;
 
         for (let i = 0; i < 24; i++) {
             const angle = (i / 24) * 360 - 90; // -90 to start at 12 o'clock position (top)
@@ -114,7 +113,6 @@ class CircularTimetable extends HTMLElement {
             // Draw line markers
             markers += `<line class="hour-marker" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`;
 
-            // Draw hour text every 3 hours
             if (i % 3 === 0) {
                 markers += `<text class="hour-text" x="${textX}" y="${textY}">${i}</text>`;
             }
@@ -122,40 +120,43 @@ class CircularTimetable extends HTMLElement {
         return markers;
     }
 
-    renderItems(center, outerRadiusOfTimetable) {
+
+    renderItems(center, outerRadiusOfTimetable, minRadialRadius) { // Changed parameter name
         let itemElements = '';
-        const maxItems = 5; // Max number of concentric bands for schedule items
-        const totalRingWidth = outerRadiusOfTimetable - 40; // Total width available for schedule items
-        const bandWidth = totalRingWidth / maxItems; // Width of each band
 
-        this._items.forEach((item, index) => {
-            // Calculate radii for this item's band
-            const outerBandRadius = outerRadiusOfTimetable - (bandWidth * index);
-            const innerBandRadius = outerBandRadius - bandWidth;
+        this._timeSlices.forEach(timeSlice => { // Changed from _items
+            const { start, end, activeEvents } = timeSlice;
 
-            if (innerBandRadius <= 0) { // Avoid drawing items too close to center or overlapping
-                console.warn(`Item ${item.name} (index ${index}) would be too small or overlap center. Skipping.`);
+            if (activeEvents.length === 0) {
                 return;
             }
 
-            // Handle overnight events: split into two parts for rendering
-            if (item.start > item.end) {
-                // Part 1: from start to midnight (24:00)
+            // Calculate total priority for this time slice
+            const totalPriority = activeEvents.reduce((sum, event) => sum + (event.priority || 1), 0);
+            const availableRadialSpace = outerRadiusOfTimetable - minRadialRadius;
+
+            let currentRadialInner = minRadialRadius;
+
+            activeEvents.forEach(event => {
+                const priorityProportion = (event.priority || 1) / totalPriority;
+                const radialThickness = priorityProportion * availableRadialSpace;
+
+                const eventInnerRadius = currentRadialInner;
+                const eventOuterRadius = currentRadialInner + radialThickness;
+
+                // Ensure valid radii
+                if (eventInnerRadius < minRadialRadius || eventOuterRadius > outerRadiusOfTimetable) {
+                    console.warn(`Calculated radii out of bounds for event ${event.name}. Skipping.`);
+                    return;
+                }
+
                 itemElements += this._createSector(
-                    item.name, item.start, 24 * 60, item.color, item.borderColor,
-                    center, innerBandRadius, outerBandRadius
+                    event.name, start, end, event.color, event.borderColor,
+                    center, eventInnerRadius, eventOuterRadius
                 );
-                // Part 2: from midnight (00:00) to end
-                itemElements += this._createSector(
-                    item.name, 0, item.end, item.color, item.borderColor,
-                    center, innerBandRadius, outerBandRadius
-                );
-            } else {
-                itemElements += this._createSector(
-                    item.name, item.start, item.end, item.color, item.borderColor,
-                    center, innerBandRadius, outerBandRadius
-                );
-            }
+
+                currentRadialInner = eventOuterRadius; // Update for the next event in this timeSlice
+            });
         });
         return itemElements;
     }
@@ -169,7 +170,7 @@ class CircularTimetable extends HTMLElement {
 
         // Calculate text position in the middle of the sector
         const midAngle = startAngle + (endAngle - startAngle) / 2;
-        const textMidRadius = innerRadius + (outerRadius - innerRadius) / 2;
+        const textMidRadius = innerRadius + (outerRadius - innerRadius) / 2; // Middle of the radial layer
         const textPos = this.polarToCartesian(center, center, textMidRadius, midAngle);
 
 
@@ -182,13 +183,23 @@ class CircularTimetable extends HTMLElement {
     }
 
     _describeSector(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle) {
-        const startInner = this.polarToCartesian(centerX, centerY, innerRadius, endAngle); // SVG arc draws clockwise
-        const endInner = this.polarToCartesian(centerX, centerY, innerRadius, startAngle);
+        // Ensure angles are ordered correctly for SVG path commands
+        let sAngle = startAngle;
+        let eAngle = endAngle;
 
-        const startOuter = this.polarToCartesian(centerX, centerY, outerRadius, endAngle);
-        const endOuter = this.polarToCartesian(centerX, centerY, outerRadius, startAngle);
+        // Handle full circle
+        if (Math.abs(eAngle - sAngle) >= 360) {
+            sAngle = 0;
+            eAngle = 359.99; // Close to 360 but not exactly, to ensure arc is drawn
+        }
 
-        const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1"; // For inner arc
+        const startInner = this.polarToCartesian(centerX, centerY, innerRadius, eAngle); // SVG arc draws clockwise from end to start
+        const endInner = this.polarToCartesian(centerX, centerY, innerRadius, sAngle);
+
+        const startOuter = this.polarToCartesian(centerX, centerY, outerRadius, eAngle);
+        const endOuter = this.polarToCartesian(centerX, centerY, outerRadius, sAngle);
+
+        const largeArcFlag = Math.abs(eAngle - sAngle) > 180 ? "1" : "0";
 
         const path = [
             "M", endInner.x, endInner.y, // Start at inner end point
@@ -207,7 +218,6 @@ class CircularTimetable extends HTMLElement {
             x: centerX + (radius * Math.cos(angleInRadians)),
             y: centerY + (radius * Math.sin(angleInRadians))
         };
-    }
-}
+    }}
 
 customElements.define('circular-timetable', CircularTimetable);
