@@ -1,1 +1,51 @@
-/* Add styles here */
+:root {
+    --color-primary: #8E44AD;
+    --color-accent: #3498DB;
+    --color-background: #121212;
+    --color-surface: #1E1E1E;
+    --color-text-primary: #FFFFFF;
+    --color-text-secondary: #B0B0B0;
+    --color-border: #2D2D2D;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+    --glow-color: rgba(52, 152, 219, 0.7);
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    text-align: center;
+}
+
+header {
+    width: 100%;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 2rem;
+}
+
+h1 {
+    color: var(--color-primary);
+    margin: 0;
+}
+
+main {
+    width: 100%;
+    padding: 0 1rem;
+}
+
+timetable-app {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+}
+
