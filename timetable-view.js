@@ -29,7 +29,9 @@ class CircularTimetable extends HTMLElement {
     render() {
         const size = 500;
         const center = size / 2;
-        const radius = size / 2 - 40;
+        // Radius of the outermost part of the timetable where the schedule items start.
+        // The inner part will be used for central circle or inner details if any.
+        const outerRadiusOfTimetable = size / 2 - 40;
 
         this.shadowRoot.innerHTML = `
             <style>
@@ -45,143 +47,160 @@ class CircularTimetable extends HTMLElement {
                     height: 100%;
                 }
                 .background-circle {
-                    fill: var(--color-surface, #1E1E1E);
-                    stroke: var(--color-border, #2D2D2D);
+                    fill: var(--color-surface);
+                    stroke: var(--color-border);
                     stroke-width: 1;
                 }
                 .hour-marker {
-                    stroke: var(--color-border, #2D2D2D);
+                    stroke: var(--color-border);
                     stroke-width: 1;
                 }
                 .hour-text {
-                    fill: var(--color-text-secondary, #B0B0B0);
+                    fill: var(--color-text-secondary);
                     font-size: 14px;
                     text-anchor: middle;
                     dominant-baseline: middle;
                 }
-                .item-arc {
-                    fill: none;
-                    stroke-linecap: round;
+                .item-sector {
+                    transition: fill 0.3s ease, stroke 0.3s ease, transform 0.3s ease;
+                    cursor: pointer;
                 }
-                .item-arc-path {
-                    fill: none;
+                .item-sector:hover {
+                    transform: scale(1.01);
+                    transform-origin: ${center}px ${center}px;
+                    filter: brightness(1.1);
                 }
-                .item-text textPath {
-                    fill: var(--color-text-primary, #FFF);
-                    font-size: 14px;
+                .item-text {
+                    fill: var(--color-text-primary);
+                    font-size: 12px;
                     font-weight: bold;
+                    text-anchor: middle;
+                    dominant-baseline: middle;
+                    pointer-events: none; /* Make text not interfere with mouse events on the sector */
                 }
             </style>
             <svg viewBox="0 0 ${size} ${size}" id="timetable-svg">
-                <defs></defs>
-                <circle class="background-circle" cx="${center}" cy="${center}" r="${radius}" />
-                <g class="hour-markers">
-                    ${this.renderHourMarkers(center, radius)}
-                </g>
+                <circle class="background-circle" cx="${center}" cy="${center}" r="${outerRadiusOfTimetable}" />
                 <g class="schedule-items">
-                    ${this.renderItems(center, radius)}
+                    ${this.renderItems(center, outerRadiusOfTimetable)}
                 </g>
+                <g class="hour-markers">
+                    ${this.renderHourMarkers(center, outerRadiusOfTimetable)}
+                </g>
+                <circle cx="${center}" cy="${center}" r="40" fill="var(--color-background)" />
+                <text x="${center}" y="${center}" class="hour-text" fill="var(--color-text-primary)" style="font-size:18px;">24h</text>
+
             </svg>
         `;
     }
 
-    renderHourMarkers(center, radius) {
+    renderHourMarkers(center, outerRadius) {
         let markers = '';
+        const innerHourMarkerRadius = outerRadius; // Markers start at the outer edge of schedule items
+        const outerHourMarkerRadius = outerRadius + 10; // Extend markers a bit outside
+        const textRadius = outerRadius + 25; // Text slightly further out
+
         for (let i = 0; i < 24; i++) {
-            const angle = (i / 24) * 360 - 90;
-            const textRadius = radius + 20;
-            const x1 = center + radius * Math.cos(angle * Math.PI / 180);
-            const y1 = center + radius * Math.sin(angle * Math.PI / 180);
-            const x2 = center + (radius - 10) * Math.cos(angle * Math.PI / 180);
-            const y2 = center + (radius - 10) * Math.sin(angle * Math.PI / 180);
+            const angle = (i / 24) * 360 - 90; // -90 to start at 12 o'clock position (top)
+
+            const x1 = center + innerHourMarkerRadius * Math.cos(angle * Math.PI / 180);
+            const y1 = center + innerHourMarkerRadius * Math.sin(angle * Math.PI / 180);
+            const x2 = center + outerHourMarkerRadius * Math.cos(angle * Math.PI / 180);
+            const y2 = center + outerHourMarkerRadius * Math.sin(angle * Math.PI / 180);
+
             const textX = center + textRadius * Math.cos(angle * Math.PI / 180);
             const textY = center + textRadius * Math.sin(angle * Math.PI / 180);
 
-            if (i % 3 === 0) { // Only show labels for every 3 hours
+            // Draw line markers
+            markers += `<line class="hour-marker" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`;
+
+            // Draw hour text every 3 hours
+            if (i % 3 === 0) {
                 markers += `<text class="hour-text" x="${textX}" y="${textY}">${i}</text>`;
             }
-            markers += `<line class="hour-marker" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`;
         }
         return markers;
     }
 
-    renderItems(center, radius) {
+    renderItems(center, outerRadiusOfTimetable) {
         let itemElements = '';
-        const defs = this.shadowRoot.querySelector('defs');
-        if (defs) defs.innerHTML = ''; // Clear previous defs
+        const maxItems = 5; // Max number of concentric bands for schedule items
+        const totalRingWidth = outerRadiusOfTimetable - 40; // Total width available for schedule items
+        const bandWidth = totalRingWidth / maxItems; // Width of each band
 
-        const arcWidth = 35;
-        
         this._items.forEach((item, index) => {
-            const itemRadius = radius - (index * (arcWidth + 8)) - (arcWidth / 2);
-            
-            if (item.start > item.end) { // Overnight event
-                itemElements += this._createArc(item, item.start, 24, center, itemRadius, arcWidth, index, true);
-                itemElements += this._createArc(item, 0, item.end, center, itemRadius, arcWidth, index, false);
+            // Calculate radii for this item's band
+            const outerBandRadius = outerRadiusOfTimetable - (bandWidth * index);
+            const innerBandRadius = outerBandRadius - bandWidth;
+
+            if (innerBandRadius <= 0) { // Avoid drawing items too close to center or overlapping
+                console.warn(`Item ${item.name} (index ${index}) would be too small or overlap center. Skipping.`);
+                return;
+            }
+
+            // Handle overnight events: split into two parts for rendering
+            if (item.start > item.end) {
+                // Part 1: from start to midnight (24:00)
+                itemElements += this._createSector(
+                    item.name, item.start, 24 * 60, item.color, item.borderColor,
+                    center, innerBandRadius, outerBandRadius
+                );
+                // Part 2: from midnight (00:00) to end
+                itemElements += this._createSector(
+                    item.name, 0, item.end, item.color, item.borderColor,
+                    center, innerBandRadius, outerBandRadius
+                );
             } else {
-                itemElements += this._createArc(item, item.start, item.end, center, itemRadius, arcWidth, index, true);
+                itemElements += this._createSector(
+                    item.name, item.start, item.end, item.color, item.borderColor,
+                    center, innerBandRadius, outerBandRadius
+                );
             }
         });
         return itemElements;
     }
 
-    _createArc(item, startHour, endHour, center, radius, width, index, showText) {
-        const startAngle = (startHour / 24) * 360 - 90;
-        const endAngle = (endHour / 24) * 360 - 90;
-        
-        // Path for the visible stroke
-        const arcPath = this._describeArc(center, center, radius, startAngle, endAngle);
-        // Path for the textPath (needs to be a separate path in defs)
-        const textPathId = `text-path-${item.id}-${index}-${startHour}`;
-        const textPathDef = this._describeArc(center, center, radius, startAngle, endAngle, true);
+    _createSector(name, startMinutes, endMinutes, fillColor, strokeColor, center, innerRadius, outerRadius) {
+        // Convert minutes to degrees (0-1440 minutes in 24 hours)
+        const startAngle = (startMinutes / (24 * 60)) * 360 - 90; // -90 to start at 12 o'clock
+        const endAngle = (endMinutes / (24 * 60)) * 360 - 90;
 
-        const defs = this.shadowRoot.querySelector('defs');
-        const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        pathElement.setAttribute('id', textPathId);
-        pathElement.setAttribute('d', textPathDef);
-        defs.appendChild(pathElement);
-        
-        let textElement = '';
-        if (showText) {
-            textElement = `
-                <text class="item-text" dy="-10">
-                    <textPath href="#${textPathId}" startOffset="50%" text-anchor="middle">
-                        ${item.name}
-                    </textPath>
-                </text>
-            `;
-        }
+        const pathData = this._describeSector(center, center, innerRadius, outerRadius, startAngle, endAngle);
+
+        // Calculate text position in the middle of the sector
+        const midAngle = startAngle + (endAngle - startAngle) / 2;
+        const textMidRadius = innerRadius + (outerRadius - innerRadius) / 2;
+        const textPos = this.polarToCartesian(center, center, textMidRadius, midAngle);
+
 
         return `
             <g>
-                <path class="item-arc" d="${arcPath}" stroke="${item.color}" stroke-width="${width}" />
-                ${textElement}
+                <path class="item-sector" d="${pathData}" fill="${fillColor}" stroke="${strokeColor}" />
+                <text class="item-text" x="${textPos.x}" y="${textPos.y}">${name}</text>
             </g>
         `;
     }
 
-    _describeArc(x, y, radius, startAngle, endAngle, forTextPath = false) {
-        // Ensure endAngle is greater than startAngle for arc calculation
-        if (endAngle <= startAngle) {
-            endAngle += 360;
-        }
-        
-        const start = this.polarToCartesian(x, y, radius, endAngle);
-        const end = this.polarToCartesian(x, y, radius, startAngle);
+    _describeSector(centerX, centerY, innerRadius, outerRadius, startAngle, endAngle) {
+        const startInner = this.polarToCartesian(centerX, centerY, innerRadius, endAngle); // SVG arc draws clockwise
+        const endInner = this.polarToCartesian(centerX, centerY, innerRadius, startAngle);
 
-        const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
-        
-        // Sweep flag is different for text path to ensure text is upright
-        const sweepFlag = forTextPath ? "1" : "0";
+        const startOuter = this.polarToCartesian(centerX, centerY, outerRadius, endAngle);
+        const endOuter = this.polarToCartesian(centerX, centerY, outerRadius, startAngle);
 
-        const d = [
-            "M", start.x, start.y,
-            "A", radius, radius, 0, largeArcFlag, sweepFlag, end.x, end.y
+        const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1"; // For inner arc
+
+        const path = [
+            "M", endInner.x, endInner.y, // Start at inner end point
+            "A", innerRadius, innerRadius, 0, largeArcFlag, 1, startInner.x, startInner.y, // Inner arc (clockwise)
+            "L", startOuter.x, startOuter.y, // Line to outer start point
+            "A", outerRadius, outerRadius, 0, largeArcFlag, 0, endOuter.x, endOuter.y, // Outer arc (counter-clockwise)
+            "Z" // Close path
         ].join(" ");
 
-        return d;
+        return path;
     }
-    
+
     polarToCartesian(centerX, centerY, radius, angleInDegrees) {
         const angleInRadians = (angleInDegrees) * Math.PI / 180.0;
         return {

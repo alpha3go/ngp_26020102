@@ -9,9 +9,9 @@ class TimetableApp extends HTMLElement {
 
         this.state = {
             items: this._loadState() || [
-                { id: 1, name: '수면', start: 22, end: 6, color: '#2980B9' },
-                { id: 2, name: '업무', start: 9, end: 18, color: '#C0392B' },
-                { id: 3, name: '운동', start: 19, end: 20, color: '#27AE60' },
+                { id: 1, name: '수면', start: 22 * 60, end: 6 * 60, color: '#2980B9', borderColor: '#2980B9' }, // 22:00 - 06:00
+                { id: 2, name: '업무', start: 9 * 60, end: 18 * 60, color: '#C0392B', borderColor: '#C0392B' }, // 09:00 - 18:00
+                { id: 3, name: '운동', start: 19 * 60 + 30, end: 20 * 60 + 30, color: '#27AE60', borderColor: '#27AE60' }, // 19:30 - 20:30
             ],
             isDarkTheme: this._loadThemePreference()
         };
@@ -24,6 +24,14 @@ class TimetableApp extends HTMLElement {
         }
 
         this._render();
+    }
+
+    _minutesToHHMM(totalMinutes) {
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const hh = String(hours).padStart(2, '0');
+        const mm = String(minutes).padStart(2, '0');
+        return `${hh}:${mm}`;
     }
 
     _loadState() {
@@ -334,15 +342,19 @@ class TimetableApp extends HTMLElement {
                     </div>
                     <div class="form-control">
                         <label for="start">시작 시간</label>
-                        <input type="time" id="start" name="start" step="3600" required>
+                        <input type="time" id="start" name="start" step="1800" required>
                     </div>
                     <div class="form-control">
                         <label for="end">종료 시간</label>
-                        <input type="time" id="end" name="end" step="3600" required>
+                        <input type="time" id="end" name="end" step="1800" required>
                     </div>
                     <div class="form-control">
-                        <label for="color">색상</label>
+                        <label for="color">내부 색상</label>
                         <input type="color" id="color" name="color" value="#3498DB">
+                    </div>
+                    <div class="form-control">
+                        <label for="borderColor">테두리 색상</label>
+                        <input type="color" id="borderColor" name="borderColor" value="#21618C">
                     </div>
                     <button type="submit">추가</button>
                 </form>
@@ -357,7 +369,7 @@ class TimetableApp extends HTMLElement {
                         <li class="item-list-entry">
                             <span class="name">
                                 <span class="color-dot" style="background-color: ${item.color}"></span>
-                                ${item.name} (${item.start}:00 - ${item.end}:00)
+                                ${item.name} (${this._minutesToHHMM(item.start)} - ${this._minutesToHHMM(item.end)})
                             </span>
                             <button class="delete-btn" data-id="${item.id}" title="삭제">✖</button>
                         </li>
@@ -370,15 +382,17 @@ class TimetableApp extends HTMLElement {
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
-            const startHour = parseInt(formData.get('start').split(':')[0]);
-            const endHour = parseInt(formData.get('end').split(':')[0]);
+            
+            const [startHour, startMinute] = formData.get('start').split(':').map(Number);
+            const [endHour, endMinute] = formData.get('end').split(':').map(Number);
 
             const newItem = {
                 id: Date.now(),
                 name: formData.get('name'),
-                start: startHour,
-                end: endHour,
+                start: startHour * 60 + startMinute,
+                end: endHour * 60 + endMinute,
                 color: formData.get('color'),
+                borderColor: formData.get('borderColor')
             };
 
             this.state.items = [...this.state.items, newItem];
@@ -434,3 +448,4 @@ class TimetableApp extends HTMLElement {
 }
 
 customElements.define('timetable-app', TimetableApp);
+
