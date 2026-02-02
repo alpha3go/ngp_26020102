@@ -5,13 +5,24 @@ class TimetableApp extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
         this.storageKey = 'timetable-items';
+        this.themeStorageKey = 'app-theme';
+
         this.state = {
             items: this._loadState() || [
                 { id: 1, name: '수면', start: 22, end: 6, color: '#2980B9' },
                 { id: 2, name: '업무', start: 9, end: 18, color: '#C0392B' },
                 { id: 3, name: '운동', start: 19, end: 20, color: '#27AE60' },
-            ]
+            ],
+            isDarkTheme: this._loadThemePreference()
         };
+        
+        // Apply initial theme to the body element
+        if (this.state.isDarkTheme) {
+            document.body.classList.add('dark-theme');
+        } else {
+            document.body.classList.remove('dark-theme');
+        }
+
         this._render();
     }
 
@@ -31,6 +42,35 @@ class TimetableApp extends HTMLElement {
         } catch (e) {
             console.error('Failed to save state to localStorage', e);
         }
+    }
+
+    _loadThemePreference() {
+        try {
+            const theme = localStorage.getItem(this.themeStorageKey);
+            return theme === 'dark'; // Returns true if dark, false if light or not set
+        } catch (e) {
+            console.error('Failed to load theme preference from localStorage', e);
+            return false; // Default to light theme on error
+        }
+    }
+
+    _saveThemePreference(isDark) {
+        try {
+            localStorage.setItem(this.themeStorageKey, isDark ? 'dark' : 'light');
+        } catch (e) {
+            console.error('Failed to save theme preference to localStorage', e);
+        }
+    }
+
+    _toggleTheme() {
+        this.state.isDarkTheme = !this.state.isDarkTheme;
+        if (this.state.isDarkTheme) {
+            document.body.classList.add('dark-theme');
+        } else {
+            document.body.classList.remove('dark-theme');
+        }
+        this._saveThemePreference(this.state.isDarkTheme);
+        this._render(); // Re-render to update the toggle switch state
     }
 
     _render() {
@@ -55,10 +95,11 @@ class TimetableApp extends HTMLElement {
                 #controls-container {
                     width: 350px;
                     padding: 1.5rem;
-                    background-color: var(--color-surface, #333);
+                    background-color: var(--color-surface);
                     border-radius: 12px;
-                    border: 1px solid var(--color-border, #444);
+                    border: 1px solid var(--color-border);
                     box-shadow: 0 8px 32px 0 var(--shadow-color);
+                    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
                 }
                 
                 h2, h3 {
@@ -67,6 +108,7 @@ class TimetableApp extends HTMLElement {
                     border-bottom: 1px solid var(--color-border);
                     padding-bottom: 0.5rem;
                     margin-bottom: 1rem;
+                    transition: border-color 0.3s ease;
                 }
 
                 h3 {
@@ -89,6 +131,7 @@ class TimetableApp extends HTMLElement {
                     margin-bottom: 0.5rem;
                     font-size: 0.9rem;
                     color: var(--color-text-secondary);
+                    transition: color 0.3s ease;
                 }
 
                 input[type="text"], input[type="time"], input[type="color"] {
@@ -99,6 +142,7 @@ class TimetableApp extends HTMLElement {
                     color: var(--color-text-primary);
                     border-radius: 6px;
                     font-size: 1rem;
+                    transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease;
                 }
                 
                 input[type="color"] {
@@ -160,6 +204,7 @@ class TimetableApp extends HTMLElement {
                     padding: 0.75rem;
                     background-color: var(--color-background);
                     border-radius: 6px;
+                    transition: background-color 0.3s ease;
                 }
 
                 .item-list-entry .name {
@@ -190,6 +235,69 @@ class TimetableApp extends HTMLElement {
                     transform: scale(1.1);
                 }
 
+                /* Theme Toggle Switch */
+                .theme-toggle {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 1.5rem;
+                    padding-bottom: 0.5rem;
+                    border-bottom: 1px solid var(--color-border);
+                }
+
+                .theme-switch {
+                    position: relative;
+                    display: inline-block;
+                    width: 48px;
+                    height: 24px;
+                }
+
+                .theme-switch input {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                }
+
+                .slider {
+                    position: absolute;
+                    cursor: pointer;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: #ccc;
+                    -webkit-transition: .4s;
+                    transition: .4s;
+                    border-radius: 24px;
+                }
+
+                .slider:before {
+                    position: absolute;
+                    content: "";
+                    height: 16px;
+                    width: 16px;
+                    left: 4px;
+                    bottom: 4px;
+                    background-color: white;
+                    -webkit-transition: .4s;
+                    transition: .4s;
+                    border-radius: 50%;
+                }
+
+                input:checked + .slider {
+                    background-color: var(--color-accent);
+                }
+
+                input:focus + .slider {
+                    box-shadow: 0 0 1px var(--color-accent);
+                }
+
+                input:checked + .slider:before {
+                    -webkit-transform: translateX(24px);
+                    -ms-transform: translateX(24px);
+                    transform: translateX(24px);
+                }
+
 
                 @media (max-width: 768px) {
                     :host {
@@ -210,6 +318,14 @@ class TimetableApp extends HTMLElement {
                 <circular-timetable items='${JSON.stringify(this.state.items)}'></circular-timetable>
             </div>
             <div id="controls-container">
+                <div class="theme-toggle">
+                    <span>다크 모드</span>
+                    <label class="theme-switch">
+                        <input type="checkbox" id="dark-mode-toggle" ${this.state.isDarkTheme ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
                 <h2>활동 추가</h2>
                 <form id="add-item-form">
                     <div class="form-control">
@@ -282,6 +398,10 @@ class TimetableApp extends HTMLElement {
         
         this.shadowRoot.querySelector('#export-png-btn').addEventListener('click', () => {
             this._exportAsPNG();
+        });
+
+        this.shadowRoot.querySelector('#dark-mode-toggle').addEventListener('change', () => {
+            this._toggleTheme();
         });
     }
 

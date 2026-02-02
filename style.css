@@ -1,6 +1,18 @@
 :root {
+    /* Light Theme (Default) */
     --color-primary: #8E44AD;
     --color-accent: #3498DB;
+    --color-background: #FFFFFF;
+    --color-surface: #F0F2F5;
+    --color-text-primary: #333333;
+    --color-text-secondary: #666666;
+    --color-border: #DDDDDD;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --glow-color: rgba(52, 152, 219, 0.4);
+}
+
+body.dark-theme {
+    /* Dark Theme */
     --color-background: #121212;
     --color-surface: #1E1E1E;
     --color-text-primary: #FFFFFF;
@@ -23,6 +35,7 @@ body {
     place-items: center;
     min-height: 100vh;
     text-align: center;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 header {
@@ -48,4 +61,5 @@ timetable-app {
     align-items: flex-start;
     width: 100%;
 }
+
 
